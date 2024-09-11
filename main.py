@@ -1,3 +1,4 @@
+import base64
 import os
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -104,6 +105,10 @@ class MaintenanceResponse(BaseModel):
 class MaintenanceTypeCreate(BaseModel):
     name: str
 
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
    
 # Rutas POST
 @app.post("/users/")
@@ -166,6 +171,7 @@ def read_incidences(db: Session = Depends(get_db)):
     incidences = db.query(Incidence).all()
     return incidences
 
+
 @app.post("/maintenances/")
 def create_maintenance(maintenance: MaintenanceCreate, db: Session = Depends(get_db)):
     # Crear la location
@@ -178,8 +184,8 @@ def create_maintenance(maintenance: MaintenanceCreate, db: Session = Depends(get
     db.add(db_location)
     db.commit()
     db.refresh(db_location)
-    
-    # Crear el maintenance con el id_location recién creado
+
+    # Crear el mantenimiento con la ubicación recién creada
     db_maintenance = Maintenance(
         comment=maintenance.comment,
         datetime=maintenance.datetime,
@@ -190,18 +196,24 @@ def create_maintenance(maintenance: MaintenanceCreate, db: Session = Depends(get
     db.add(db_maintenance)
     db.commit()
     db.refresh(db_maintenance)
-    
-    # Crear las maintenance pictures
-    for picture in maintenance.pictures:
+
+    # Procesar cada imagen enviada en formato Base64
+    for picture_base64 in maintenance.pictures:
+        # Decodificar la imagen de Base64 a bytes
+        picture_bytes = base64.b64decode(picture_base64)
+
+        # Crear el objeto MaintenancePicture con los bytes de la imagen
         db_maintenance_picture = MaintenancePicture(
-            picture=picture,
+            picture=picture_bytes,  # Aquí enviamos los bytes, no la cadena Base64
             datetime=maintenance.datetime,
             id_maintenance=db_maintenance.id_maintenance
         )
         db.add(db_maintenance_picture)
+
     db.commit()
 
     return db_maintenance
+
 
 @app.get("/maintenances/", response_model=List[MaintenanceResponse])
 def read_maintenances(db: Session = Depends(get_db)):
@@ -221,3 +233,14 @@ def read_maintenance_types(db: Session = Depends(get_db)):
     maintenance_types = db.query(MaintenanceType).all()
     return maintenance_types
 
+
+@app.post("/users/login")
+def login(user: UserLogin, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.username == user.username).first()
+    if not db_user or not verify_password(user.password, db_user.password):
+        raise HTTPException(
+            status_code=400, detail="Invalid username or password")
+    return {"message": "Login successful", "userId": db_user.id_user}
+
+def verify_password(plain_password, hashed_password):
+    return plain_password == hashed_password

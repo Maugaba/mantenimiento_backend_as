@@ -62,3 +62,5 @@ class MaintenancePicture(Base):
     picture = Column(BLOB)
     datetime = Column(DateTime)
     id_maintenance = Column(Integer, ForeignKey('maintenances.id_maintenance'))
+
+
